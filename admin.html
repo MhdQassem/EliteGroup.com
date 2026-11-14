@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>لوحة التحكم</title>
+<style>
+body{font:15px Cairo,Tahoma,sans-serif;margin:0;background:#f2f4f8;color:#333}
+.bar{background:#1d3f73;color:#fff;display:flex;flex-wrap:wrap;gap:6px;padding:10px 4%;align-items:center}.bar b{margin-inline-end:10px}
+.bar button{background:#ffffff26}.bar .on{background:#fff;color:#1d3f73}
+main{max-width:800px;margin:20px auto;padding:0 4%}
+.box{background:#fff;padding:18px;border-radius:12px;display:grid;gap:10px;margin-bottom:18px}
+label{display:grid;gap:4px;font-weight:700}input,textarea,select{font:inherit;padding:8px;border:1px solid #ccd;border-radius:8px}
+button{font:inherit;padding:8px 18px;border:0;border-radius:8px;background:#2f66b3;color:#fff;cursor:pointer}.del{background:#c0392b}
+.row{display:flex;align-items:center;gap:8px;background:#fff;padding:8px;border-radius:10px;margin-bottom:8px}
+.row span{flex:1}.row img{width:56px;height:42px;object-fit:cover;border-radius:6px}
+</style></head><body><div id="app"></div>
+<script>
+let csrf='',D={},tab='content',edit=null;
+const $=s=>document.querySelector(s),el=(t,p={},...k)=>{const e=Object.assign(document.createElement(t),p);e.append(...k);return e};
+const api=(a,b)=>fetch('api/index.php?a='+a,{method:b?'POST':'GET',headers:{'X-CSRF':csrf,...(b&&!(b instanceof FormData)?{'Content-Type':'application/json'}:{})},body:b instanceof FormData?b:(b&&JSON.stringify(b))}).then(r=>r.json());
+// تصغير الصور قبل الرفع (صور الجوال كبيرة): أقصى بُعد 1600px
+const shrink=f=>new Promise(ok=>{const i=new Image();i.onload=()=>{const s=Math.min(1,1600/Math.max(i.width,i.height)),c=el('canvas',{width:i.width*s,height:i.height*s});c.getContext('2d').drawImage(i,0,0,c.width,c.height);c.toBlob(b=>ok(b||f),'image/webp',.85)};i.onerror=()=>ok(f);i.src=URL.createObjectURL(f)});
+const CK=[['hero_title','عنوان الصفحة الرئيسية'],['hero_text','نص تعريفي قصير','area'],['about_text','من نحن / التعريف بي','area'],['phone1','هاتف 1'],['phone2','هاتف 2'],['whatsapp','رقم واتساب (دولي بدون +)'],['email','البريد الإلكتروني'],['address','العنوان'],['hours','ساعات الدوام'],['facebook','رابط فيسبوك'],['instagram','رابط إنستغرام']];
+const TB={services:{l:'مجالات العمل',f:[['title','العنوان'],['description','الشرح','area'],['sort_order','الترتيب','number']]},
+ categories:{l:'تصنيفات المشاريع',f:[['name','اسم التصنيف']]},
+ works:{l:'المشاريع',f:[['title','عنوان المشروع'],['description','الوصف','area'],['category_id','التصنيف','cat']],img:'image'},
+ partners:{l:'الشركاء والبراندات',f:[['name','الاسم'],['kind','النوع','kind']],img:'logo'}};
+const inp=([n,l,ty],v)=>{let i;
+ if(ty==='area')i=el('textarea',{rows:4});
+ else if(ty==='cat'||ty==='kind'){i=el('select');(ty==='kind'?[['partner','شريك عمل'],['brand','براند']]:[['','بدون تصنيف'],...D.categories.map(c=>[c.id,c.name])]).forEach(([x,y])=>i.append(el('option',{value:x,textContent:y})))}
+ else i=el('input',{type:ty||'text'});
+ i.name=n;i.value=v??'';return el('label',{},l,i)};
+async function load(){D=await api('public');draw()}
+function draw(){
+ $('#app').replaceChildren(el('div',{className:'bar'},el('b',{textContent:'لوحة التحكم'}),
+  ...[['content','معلومات التواصل والنصوص'],...Object.entries(TB).map(([k,v])=>[k,v.l]),['pass','كلمة المرور']].map(([k,l])=>el('button',{textContent:l,className:tab===k?'on':'',onclick:()=>{tab=k;edit=null;draw()}})),
+  el('button',{textContent:'خروج',onclick:async()=>{await api('logout',{});login()}})),
+  el('main',{},tab==='content'?contentForm():tab==='pass'?passForm():tableView(tab)))}
+function contentForm(){const f=el('form',{className:'box'},...CK.map(x=>inp(x,D.content[x[0]])),el('button',{textContent:'حفظ'}));
+ f.onsubmit=async e=>{e.preventDefault();await api('content',Object.fromEntries(new FormData(f)));alert('تم الحفظ');load()};return f}
+function passForm(){const f=el('form',{className:'box'},el('label',{},'كلمة المرور الحالية',el('input',{name:'old',type:'password',required:1})),el('label',{},'الجديدة (8 أحرف+)',el('input',{name:'new',type:'password',minLength:8,required:1})),el('button',{textContent:'تغيير'}));
+ f.onsubmit=async e=>{e.preventDefault();const x=await api('pass',Object.fromEntries(new FormData(f)));alert(x.ok?'تم التغيير':'تعذر التغيير: تأكد من كلمة المرور الحالية');f.reset()};return f}
+function tableView(t){
+ const T=TB[t],r=edit||{},f=el('form',{className:'box'},el('b',{textContent:r.id?'تعديل':'إضافة جديد'}),...T.f.map(x=>inp(x,r[x[0]])));
+ if(T.img)f.append(el('label',{},r.id?'الصورة (اتركها فارغة للإبقاء على الحالية)':'الصورة',el('input',{type:'file',name:'file',accept:'image/*'})));
+ f.append(el('button',{textContent:'حفظ'}),...(r.id?[el('button',{type:'button',textContent:'إلغاء',onclick:()=>{edit=null;draw()}})]:[]));
+ f.onsubmit=async e=>{e.preventDefault();const fd=new FormData(f),file=T.img&&f.elements.file.files[0];
+  if(T.img&&!r.id&&!file)return alert('اختر صورة');
+  fd.append('t',t);if(r.id)fd.append('id',r.id);if(file)fd.set('file',await shrink(file),'img.webp');
+  const x=await api('save',fd);if(x.error)return alert('خطأ: '+x.error);edit=null;load()};
+ return el('div',{},f,...D[t].map(x=>el('div',{className:'row'},T.img&&x[T.img]?el('img',{src:'uploads/'+x[T.img]}):'',el('span',{textContent:x.title||x.name}),
+  el('button',{textContent:'تعديل',onclick:()=>{edit=x;draw();scrollTo(0,0)}}),
+  el('button',{className:'del',textContent:'حذف',onclick:async()=>{if(confirm('تأكيد الحذف؟')){await api('del',{t,id:x.id});load()}}}))))}
+function login(){const f=el('form',{className:'box',style:'max-width:340px;margin:80px auto'},el('b',{textContent:'تسجيل دخول المدير'}),el('input',{name:'username',placeholder:'اسم المستخدم',required:1}),el('input',{name:'password',type:'password',placeholder:'كلمة المرور',required:1}),el('button',{textContent:'دخول'}));
+ f.onsubmit=async e=>{e.preventDefault();const x=await api('login',Object.fromEntries(new FormData(f)));if(x.csrf){csrf=x.csrf;load()}else alert('بيانات الدخول غير صحيحة')};
+ $('#app').replaceChildren(f)}
+api('me').then(x=>{if(x.user){csrf=x.csrf;load()}else login()});
+</script></body></html>
